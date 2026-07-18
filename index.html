@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-stone-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Truth & Tact: Interactive Ethics Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        .custom-gradient-a { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); }
+        .custom-gradient-b { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
+        .custom-gradient-c { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .bar-transition { transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+    </style>
+</head>
+<body class="font-sans text-stone-800 antialiased h-full flex flex-col justify-between">
+
+    <header class="bg-white border-b border-stone-100 py-3 px-4 sm:px-6 shadow-sm z-10">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-xl">⚖️</span>
+                <div>
+                    <h1 class="font-bold text-stone-900 tracking-tight text-sm sm:text-base">Truth & Tact</h1>
+                    <p class="text-[10px] sm:text-xs text-stone-500 font-medium uppercase tracking-wider">Lecture Simulator</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="room-badge" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-500 text-white">
+                    Room: <span id="room-badge-code" class="ml-1 select-all">----</span>
+                </span>
+                <span id="conn-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                    <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    Initializing
+                </span>
+                <span id="role-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-stone-100 text-stone-700">
+                    Detecting Mode
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <div id="firebase-warning" class="hidden bg-stone-900 text-stone-100 px-4 py-3 text-xs sm:text-sm text-center flex items-center justify-center gap-3 transition-all">
+        <span>✨ <strong>Local Test Sync Mode:</strong> Open another tab to test synchronization instantly without setting up databases!</span>
+        <button onclick="document.getElementById('firebase-warning').remove()" class="bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white px-2 py-1 rounded transition-colors text-xs">Dismiss</button>
+    </div>
+
+    <main class="flex-grow flex flex-col items-center justify-start py-6 px-4 max-w-6xl w-full mx-auto relative overflow-y-auto">
+        
+        <!-- ==================== ROOM ENTRY SCREEN (FOR STUDENTS ARRIVING RAW) ==================== -->
+        <div id="screen-join" class="hidden w-full max-w-md bg-white p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col gap-6 my-auto text-center animate-fade-in">
+            <span class="text-3xl">🎓</span>
+            <div>
+                <h2 class="font-serif text-3xl text-stone-900">Join Live Lecture</h2>
+                <p class="text-stone-500 text-sm mt-1">Please enter the 4-digit room code displayed at the front of the hall.</p>
+            </div>
+            <div class="flex flex-col gap-3">
+                <input id="input-room-code" type="text" maxlength="4" placeholder="0000" class="w-full text-center text-4xl font-mono tracking-widest font-bold py-3 border-2 border-stone-200 rounded-2xl focus:border-stone-900 focus:outline-none transition-colors uppercase">
+                <button onclick="submitRoomCode()" class="w-full bg-stone-900 text-white hover:bg-stone-800 py-4 px-6 rounded-2xl font-bold tracking-wide transition-all shadow-md active:scale-95 text-base">
+                    Connect to Lecture
+                </button>
+            </div>
+            <p id="join-error-msg" class="text-xs text-rose-500 font-semibold hidden"></p>
+        </div>
+
+        <!-- ==================== LOBBY / WAITING SCREEN (HOST & PLAYER) ==================== -->
+        <div id="screen-lobby" class="hidden w-full max-w-4xl flex flex-col md:flex-row gap-8 items-center justify-center my-auto">
+            <!-- Left Lobby: Information and Joining Details -->
+            <div class="w-full md:w-1/2 flex flex-col gap-5 text-center md:text-left">
+                <span class="text-xs uppercase font-bold tracking-widest text-stone-500 bg-stone-100 px-3 py-1 rounded-full self-center md:self-start">College Interactive Case Study</span>
+                <h2 class="font-serif text-4xl sm:text-5xl text-stone-900 leading-tight">Honesty vs. Compassion</h2>
+                <p class="text-stone-600 text-base sm:text-lg leading-relaxed">
+                    How do we balance raw ethical truth with empathetic support? Join this real-time simulator to map the collective conscience of our lecture hall.
+                </p>
+                <div class="hidden-player-only bg-stone-100 p-4 rounded-xl border border-stone-200 flex flex-col gap-2 mt-2">
+                    <p class="text-xs text-stone-500 uppercase tracking-wider font-semibold">Join Instructions for Students</p>
+                    <p class="text-sm font-medium text-stone-700">Enter the Room Code shown on the right, or scan the QR code to connect instantly.</p>
+                </div>
+            </div>
+
+            <!-- Right Lobby: Control Board / QR Code box -->
+            <div class="w-full md:w-1/2 max-w-md bg-white p-6 sm:p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col items-center justify-center text-center gap-6">
+                <!-- Large Room Code Display for Front of Lecture Room -->
+                <div class="w-full bg-stone-900 text-stone-100 p-6 rounded-2xl shadow-md flex flex-col items-center justify-center">
+                    <span class="text-[10px] uppercase font-bold tracking-widest text-stone-400">Classroom Room Code</span>
+                    <span id="lobby-code-display" class="text-5xl sm:text-6xl font-mono font-bold text-amber-400 tracking-wider my-2">----</span>
+                    <span class="text-xs text-stone-300">Enter on your device to participate</span>
+                </div>
+
+                <!-- QR Destination -->
+                <div id="lobby-qr-container" class="flex flex-col items-center gap-4 w-full">
+                    <div id="lobby-qrcode" class="p-4 bg-white border border-stone-200 rounded-2xl shadow-sm transition-transform hover:scale-105"></div>
+                    <div class="w-full">
+                        <p class="text-xs text-stone-400">Scan code to register device</p>
+                        <span id="player-link-text" class="text-[10px] font-semibold text-stone-600 underline select-all break-all block mt-1"></span>
+                    </div>
+                </div>
+                <!-- Host Start Control -->
+                <div id="lobby-host-controls" class="hidden w-full pt-4 border-t border-stone-100">
+                    <button onclick="advanceScenario()" class="w-full bg-stone-900 text-stone-50 hover:bg-stone-800 py-4 px-6 rounded-2xl font-semibold tracking-wide transition-all shadow-md active:scale-95 text-base flex items-center justify-center gap-2">
+                        <span>Begin Classroom Game</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                    </button>
+                    <p class="text-[10px] text-stone-400 mt-2">Professors: Clicking starts Scenario 1 on all student devices.</p>
+                </div>
+                <!-- Player Waiting Message -->
+                <div id="lobby-player-message" class="hidden flex flex-col items-center gap-3">
+                    <div class="flex space-x-2 justify-center items-center py-2">
+                        <div class="h-3 w-3 bg-stone-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                        <div class="h-3 w-3 bg-stone-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                        <div class="h-3 w-3 bg-stone-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
+                    </div>
+                    <p class="text-stone-700 font-semibold text-lg">Waiting for Instructor</p>
+                    <p class="text-xs text-stone-500 max-w-xs">The scenario prompts will appear automatically on your screen once the presentation begins.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PLAYING ACTIVE SCENARIO SCREEN ==================== -->
+        <div id="screen-playing" class="hidden w-full max-w-5xl flex flex-col lg:flex-row gap-8 items-start my-auto">
+            <!-- Left Side: Scenario Text & Core Information -->
+            <div class="w-full lg:w-1/2 flex flex-col gap-6">
+                <div class="flex items-center gap-2">
+                    <span id="playing-progress-tag" class="text-xs font-extrabold uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full"></span>
+                </div>
+                <h3 id="playing-scenario-title" class="font-serif text-3xl sm:text-4xl text-stone-900 leading-tight"></h3>
+                <blockquote id="playing-scenario-body" class="text-stone-700 text-base sm:text-lg leading-relaxed border-l-4 border-stone-300 pl-4 italic py-1"></blockquote>
+                
+                <!-- Player Active Choices: Large buttons -->
+                <div id="player-active-panel" class="hidden flex flex-col gap-3 mt-2">
+                    <p class="text-xs font-bold text-stone-400 uppercase tracking-widest">Select your course of action:</p>
+                    <div id="player-options-grid" class="flex flex-col gap-3">
+                        <!-- Rendered via JS -->
+                    </div>
+                </div>
+
+                <!-- Player Locked State: Already Voted Confirmation -->
+                <div id="player-locked-panel" class="hidden bg-stone-900 text-stone-100 p-6 rounded-3xl shadow-lg border border-stone-800 flex flex-col items-center text-center gap-3 animate-fade-in">
+                    <div class="w-12 h-12 rounded-full bg-stone-800 text-stone-100 flex items-center justify-center text-xl font-bold">✓</div>
+                    <div>
+                        <h4 class="font-bold text-lg">Your response is locked in!</h4>
+                        <p class="text-xs text-stone-400 mt-1">Look up at the classroom screen to watch the consensus shift in real time.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Real-time Host Results & Instructor Deck -->
+            <div id="host-results-panel" class="hidden w-full lg:w-1/2 bg-white border border-stone-200 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col gap-6">
+                <div class="flex items-center justify-between border-b border-stone-100 pb-4">
+                    <div>
+                        <h4 class="font-bold text-stone-900">Live Classroom Poll</h4>
+                        <p class="text-xs text-stone-400">Responsive distribution metric</p>
+                    </div>
+                    <span id="total-scen-votes" class="bg-stone-100 text-stone-700 px-3 py-1 rounded-full text-xs font-bold">0 submissions</span>
+                </div>
+
+                <!-- CSS Horizontal Live Chart -->
+                <div class="flex flex-col gap-6">
+                    <!-- Option A Bar -->
+                    <div class="flex flex-col gap-2">
+                        <div class="flex justify-between items-start text-xs font-bold">
+                            <span class="text-stone-800 flex items-center gap-1.5"><span class="w-3 h-3 rounded-full custom-gradient-a inline-block"></span>Option A</span>
+                            <span id="label-votes-a" class="text-stone-500">0 votes (0%)</span>
+                        </div>
+                        <div class="w-full bg-stone-100 h-8 rounded-full overflow-hidden relative border border-stone-200">
+                            <div id="bar-votes-a" class="custom-gradient-a bar-transition h-full w-0 flex items-center justify-end px-3"></div>
+                        </div>
+                        <p id="analysis-text-a" class="text-[11px] text-stone-500 italic bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200/50"></p>
+                    </div>
+
+                    <!-- Option B Bar -->
+                    <div class="flex flex-col gap-2">
+                        <div class="flex justify-between items-start text-xs font-bold">
+                            <span class="text-stone-800 flex items-center gap-1.5"><span class="w-3 h-3 rounded-full custom-gradient-b inline-block"></span>Option B</span>
+                            <span id="label-votes-b" class="text-stone-500">0 votes (0%)</span>
+                        </div>
+                        <div class="w-full bg-stone-100 h-8 rounded-full overflow-hidden relative border border-stone-200">
+                            <div id="bar-votes-b" class="custom-gradient-b bar-transition h-full w-0 flex items-center justify-end px-3"></div>
+                        </div>
+                        <p id="analysis-text-b" class="text-[11px] text-stone-500 italic bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200/50"></p>
+                    </div>
+
+                    <!-- Option C Bar -->
+                    <div class="flex flex-col gap-2">
+                        <div class="flex justify-between items-start text-xs font-bold">
+                            <span class="text-stone-800 flex items-center gap-1.5"><span class="w-3 h-3 rounded-full custom-gradient-c inline-block"></span>Option C</span>
+                            <span id="label-votes-c" class="text-stone-500">0 votes (0%)</span>
+                        </div>
+                        <div class="w-full bg-stone-100 h-8 rounded-full overflow-hidden relative border border-stone-200">
+                            <div id="bar-votes-c" class="custom-gradient-c bar-transition h-full w-0 flex items-center justify-end px-3"></div>
+                        </div>
+                        <p id="analysis-text-c" class="text-[11px] text-stone-500 italic bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200/50"></p>
+                    </div>
+                </div>
+
+                <!-- Host Control Box -->
+                <div class="border-t border-stone-100 pt-6 flex flex-col sm:flex-row gap-3">
+                    <button onclick="resetSession()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 py-3 px-4 rounded-xl font-medium text-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-rose-200" title="Reset all votes and return to lobby">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"></path></svg>
+                        <span>Reset Game</span>
+                    </button>
+                    <button onclick="retreatScenario()" class="flex-1 bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-800 py-3 px-4 rounded-xl font-medium text-sm transition-all active:scale-95 flex items-center justify-center gap-2" title="Go back one scenario">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+                        <span>Back</span>
+                    </button>
+                    <button id="btn-next-scenario" onclick="advanceScenario()" class="flex-2 bg-stone-950 hover:bg-stone-800 text-white py-3 px-6 rounded-xl font-bold text-sm tracking-wide transition-all active:scale-95 flex items-center justify-center gap-2 shadow-sm">
+                        <span>Advance to Next</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== CUMULATIVE STUDY / WRAP-UP SCREEN ==================== -->
+        <div id="screen-summary" class="hidden w-full max-w-4xl flex flex-col gap-8 my-auto py-4">
+            <div class="text-center max-w-2xl mx-auto flex flex-col gap-3">
+                <span class="text-xs uppercase font-extrabold tracking-widest text-amber-800 bg-amber-50 border border-amber-200 px-3.5 py-1 rounded-full self-center">Interactive Session Concluded</span>
+                <h2 class="font-serif text-3xl sm:text-4xl text-stone-900 leading-tight">Classroom Philosophy Map</h2>
+                <p class="text-stone-600 text-sm sm:text-base">We analyzed the aggregate response coordinates of all active student device interactions. Here is how our lecture room handles interpersonal truth:</p>
+            </div>
+
+            <!-- Big Comparative Stat Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Blunt Honesty Metric Card -->
+                <div class="bg-white border border-rose-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 w-24 h-24 bg-rose-50 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform"></div>
+                    <div class="relative flex flex-col gap-4">
+                        <span class="text-rose-600 font-extrabold text-xs uppercase tracking-wider">Blunt Honesty</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="final-percent-a" class="text-5xl font-extrabold text-stone-900">0%</span>
+                            <span id="final-raw-a" class="text-stone-400 text-sm font-semibold">/ 0 votes</span>
+                        </div>
+                        <p class="text-xs text-stone-500 leading-relaxed">
+                            Prioritizes immediate accuracy, unfiltered information, and rigorous transparency above emotional buffers. Believes initial discomfort builds long-term clarity.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Comforting Dishonesty Metric Card -->
+                <div class="bg-white border border-sky-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 w-24 h-24 bg-sky-50 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform"></div>
+                    <div class="relative flex flex-col gap-4">
+                        <span class="text-sky-600 font-extrabold text-xs uppercase tracking-wider">Comforting Dishonesty</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="final-percent-b" class="text-5xl font-extrabold text-stone-900">0%</span>
+                            <span id="final-raw-b" class="text-stone-400 text-sm font-semibold">/ 0 votes</span>
+                        </div>
+                        <p class="text-xs text-stone-500 leading-relaxed">
+                            Prioritizes immediate emotional protection, stress reduction, and maintaining social harmony. Avoids friction to prioritize warmth.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Compassionate Honesty Metric Card -->
+                <div class="bg-white border border-emerald-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 w-24 h-24 bg-emerald-50 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform"></div>
+                    <div class="relative flex flex-col gap-4">
+                        <span class="text-emerald-600 font-extrabold text-xs uppercase tracking-wider">Compassionate Honesty</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="final-percent-c" class="text-5xl font-extrabold text-stone-900">0%</span>
+                            <span id="final-raw-c" class="text-stone-400 text-sm font-semibold">/ 0 votes</span>
+                        </div>
+                        <p class="text-xs text-stone-500 leading-relaxed">
+                            Delivers difficult truths with explicit care, supportive context, or interactive solutions. Seeks structural transparency wrapped in empathy.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-center mt-4">
+                <button id="btn-final-reset" onclick="resetSession()" class="hidden-player-only bg-stone-100 hover:bg-stone-200 text-stone-700 py-3.5 px-8 rounded-xl font-semibold text-xs tracking-wider uppercase transition-all shadow-sm">
+                    Reset Simulator & Start Over
+                </button>
+                <div id="summary-player-msg" class="hidden text-stone-500 text-xs text-center">
+                    Thank you for participating! Review your ethics profile above and join your classmates in discussing these findings.
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t border-stone-100 py-4 px-6 text-center text-[10px] sm:text-xs text-stone-400 flex flex-col sm:flex-row justify-between items-center gap-2 z-10 shadow-sm">
+        <p>Built for Classroom Ethics Experiments &bull; ⚖️ Truth vs Tact Framework</p>
+        <button id="btn-footer-reset" onclick="resetSession()" class="hidden-player-only text-rose-500 hover:text-rose-700 hover:underline uppercase tracking-wider font-extrabold text-[9px] sm:text-[10px]">
+            ⚠️ Danger Zone: Wipe Server State
+        </button>
+    </footer>
+
+    <!-- Firebase CDN SDK Core Script Setup -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, onSnapshot, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =====================================================================
+        // 🔥 INJECTED FROM YOUR TRUE CONFIGURATION
+        // =====================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWA3hxLNgzkAL43NZ_HvsAMQZ9Ve8giwg",
+            authDomain: "truth-and-tact.firebaseapp.com",
+            projectId: "truth-and-tact",
+            storageBucket: "truth-and-tact.firebasestorage.app",
+            messagingSenderId: "1013511387520",
+            appId: "1:1013511387520:web:49e87d5d24b0a2e406a965",
+            measurementId: "G-5C6Q34S14L"
+        };
+        // =====================================================================
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'honesty-compassion-game';
+
+        const SCENARIOS = [
+            {
+                title: "The Film",
+                question: "A close friend just finished their first short film and is clearly proud of it. It's earnest but has real problems: the pacing drags in the middle and the lead actor's performance is flat. They ask you directly, \"Be honest, what did you think?\"",
+                options: {
+                    A: "Honestly? The pacing lost me around the middle, and I didn't buy the lead's performance.",
+                    B: "I loved it, genuinely no notes.",
+                    C: "The camera work in the opening is really strong. The pacing lost me a bit in the middle though, want me to show you where?"
+                },
+                analysis: {
+                    A: "Raw, blunt truth-telling.",
+                    B: "Immediate harmony preservation.",
+                    C: "Cooperative critique with care."
+                }
+            },
+            {
+                title: "The Waiting Room",
+                question: "You're a nurse. A patient's family is in the waiting room, exhausted and scared, and asks, \"Is he going to be okay?\" The truth is the next 48 hours are uncertain and the outlook isn't good.",
+                options: {
+                    A: "Statistically, his chances aren't great given the extent of the injury.",
+                    B: "Try not to worry, I'm sure he'll pull through.",
+                    C: "It's serious, and the next 48 hours matter most. Here's what we're watching for, and I'll keep you updated as soon as anything changes."
+                },
+                analysis: {
+                    A: "Dry clinical probabilities.",
+                    B: "Compassionate, but unrealistic assurance.",
+                    C: "Honest status delivery with supportive actions."
+                }
+            },
+            {
+                title: "Before the Interview",
+                question: "Your friend is about to walk into a big job interview at a fairly traditional company, wearing sneakers with an otherwise sharp outfit. They ask, \"Do I look good?\"",
+                options: {
+                    A: "Those sneakers are wrong for this interview.",
+                    B: "You look great!",
+                    C: "You look sharp, honestly. I'd swap the sneakers for something more formal though, this firm's pretty traditional, and you've got time to change."
+                },
+                analysis: {
+                    A: "Unmitigated fashion alert.",
+                    B: "Validation prioritizing confidence over risk.",
+                    C: "Actionable alert honoring context and timing."
+                }
+            },
+            {
+                title: "The Group Project",
+                question: "Your group project is over and you have to submit an anonymous peer evaluation. One teammate did noticeably less work than everyone else, and separately, just asked you in person, \"Do you think I pulled my weight on this?\"",
+                options: {
+                    A: "Rate them honestly and low on the evaluation, say nothing to them directly.",
+                    B: "Rate them generously on the evaluation to protect their grade, and tell them \"yeah, you did fine\" in person.",
+                    C: "Rate them honestly on the evaluation, and also tell them directly and privately what fell short, so it isn't a surprise."
+                },
+                analysis: {
+                    A: "Strict structural feedback with non-confrontation.",
+                    B: "Compromised metrics to protect feelings.",
+                    C: "Consistent systemic feedback paired with safe disclosure."
+                }
+            },
+            {
+                title: "The Car Keys",
+                question: "Your grandparent has been getting more forgetful lately and asks you, \"Do you think I should still be driving?\"",
+                options: {
+                    A: "No, honestly, I don't think you should be driving anymore.",
+                    B: "Of course, you're fine, don't worry about it.",
+                    C: "I've noticed a few things that worry me. Would you be open to getting a driving assessment done, just so we both know for sure?"
+                },
+                analysis: {
+                    A: "Abrupt reality orientation.",
+                    B: "Dangerous verification to preserve status.",
+                    C: "Safe assessment framing for shared understanding."
+                }
+            },
+            {
+                title: "The Feedback",
+                question: "Your manager, who you respect and who has been a genuine mentor to you, asks for your honest feedback on how they've been leading the team lately. Their meetings have been running long and unfocused, and a few people on the team have quietly started dreading them.",
+                options: {
+                    A: "Honestly, the meetings have been running long and losing focus.",
+                    B: "I think you're doing a great job, no complaints.",
+                    C: "I think the team really values your openness in meetings. I have noticed they've been running long lately though, and a couple of people have mentioned it. Might be worth a tighter agenda?"
+                },
+                analysis: {
+                    A: "Zero-padding downward feedback.",
+                    B: "Polite deferral preventing improvements.",
+                    C: "Constructive diagnostic with constructive framework."
+                }
+            }
+        ];
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const viewMode = urlParams.get('view') === 'host' ? 'host' : 'player';
+        
+        // Setup initial room code tracking
+        let roomCode = urlParams.get('room') ? urlParams.get('room').trim().toUpperCase() : '';
+
+        let db = null;
+        let sessionDocRef = null;
+        let isDemoMode = false;
+        let audioCtx = null;
+        let unsubscribeSnapshot = null;
+
+        // Shared Application State Model
+        let state = {
+            currentScenario: -1,
+            votes: getEmptyVotes(),
+            sessionId: 'offline-default-id'
+        };
+
+        const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('honesty_compassion_sync_channel') : null;
+
+        function getEmptyVotes() {
+            const v = {};
+            for (let i = 0; i < SCENARIOS.length; i++) {
+                v[i] = { A: 0, B: 0, C: 0 };
+            }
+            return v;
+        }
+
+        function generateNumericRoomCode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        function playSfx(type) {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+                    gain.gain.setValueAtTime(0.04, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.08);
+                    osc.start();
+                    osc.stop(now + 0.08);
+                } else if (type === 'success') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(350, now);
+                    osc.frequency.setValueAtTime(550, now + 0.08);
+                    osc.frequency.setValueAtTime(750, now + 0.16);
+                    gain.gain.setValueAtTime(0.04, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.28);
+                    osc.start();
+                    osc.stop(now + 0.28);
+                }
+            } catch (err) {
+                // Keep silent if context blocking occurs
+            }
+        }
+
+        async function bootSystem() {
+            updateRoleBadge();
+
+            // Host Mode Room Generation Guard
+            if (viewMode === 'host' && !roomCode) {
+                roomCode = generateNumericRoomCode();
+                window.history.replaceState({}, '', `?view=host&room=${roomCode}`);
+            }
+
+            // Bind top indicators
+            if (roomCode) {
+                document.getElementById('room-badge').classList.remove('hidden');
+                document.getElementById('room-badge-code').innerText = roomCode;
+            }
+
+            const isDemoConfig = firebaseConfig.apiKey === "YOUR_API_KEY" || firebaseConfig.apiKey.includes("YOUR_");
+
+            if (isDemoConfig) {
+                activateDemoMode();
+            } else {
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    const auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    // Authenticate anonymously before accessing database
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    if (roomCode) {
+                        connectToRoom(roomCode);
+                    } else {
+                        // Player arrived at bare URL - request room code entry
+                        setConnectionStatus('ready', 'Enter Room Code');
+                        renderUI();
+                    }
+
+                } catch (err) {
+                    console.error("Firebase startup check failed. Engaging local fallback mode.", err);
+                    activateDemoMode();
+                }
+            }
+        }
+
+        function connectToRoom(code) {
+            setConnectionStatus('live', 'Connecting Live...');
+            
+            // Secure nested database reference pointing to the unique room
+            sessionDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', code);
+
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+            unsubscribeSnapshot = onSnapshot(sessionDocRef, (snap) => {
+                if (snap.exists()) {
+                    syncEngineState(snap.data());
+                } else {
+                    if (viewMode === 'host') {
+                        // Initialize a clean session for the instructor immediately
+                        resetSessionOnServer();
+                    } else {
+                        // Student entered an invalid/non-existent code
+                        setConnectionStatus('ready', 'Room Empty');
+                        showJoinError("This room code has not been started by any instructor yet.");
+                        document.getElementById('screen-join').classList.remove('hidden');
+                    }
+                }
+            }, (err) => {
+                console.error("Firestore database permission issue. Sliding back to local mock sync.", err);
+                activateDemoMode();
+            });
+        }
+
+        function activateDemoMode() {
+            isDemoMode = true;
+            document.getElementById('firebase-warning').classList.remove('hidden');
+            setConnectionStatus('demo', 'Local Sync Active');
+
+            if (!roomCode) {
+                // If student doesn't have a room code parameter in URL, require one
+                renderUI();
+                return;
+            }
+
+            // Sync with local memory
+            const storageKey = `demo_session_state_${roomCode}`;
+            const stored = localStorage.getItem(storageKey);
+            if (stored) {
+                try {
+                    syncEngineState(JSON.parse(stored));
+                } catch {
+                    createFreshLocalSession();
+                }
+            } else {
+                createFreshLocalSession();
+            }
+
+            // Connect Broadcast Channel syncing across tabs
+            if (bc) {
+                bc.onmessage = (event) => {
+                    if (isDemoMode && event.data && event.data.roomCode === roomCode) {
+                        syncEngineState(event.data.state);
+                        localStorage.setItem(`demo_session_state_${roomCode}`, JSON.stringify(event.data.state));
+                    }
+                };
+            }
+        }
+
+        function createFreshLocalSession() {
+            const initial = {
+                currentScenario: -1,
+                votes: getEmptyVotes(),
+                sessionId: 'session-' + Date.now()
+            };
+            syncEngineState(initial);
+            localStorage.setItem(`demo_session_state_${roomCode}`, JSON.stringify(initial));
+        }
+
+        function setConnectionStatus(type, label) {
+            const badge = document.getElementById('conn-badge');
+            badge.className = "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold";
+            if (type === 'live') {
+                badge.classList.add('bg-emerald-50', 'text-emerald-800', 'border', 'border-emerald-200');
+                badge.innerHTML = `<span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500"></span>${label}`;
+            } else if (type === 'demo') {
+                badge.classList.add('bg-amber-50', 'text-amber-800', 'border', 'border-amber-200');
+                badge.innerHTML = `<span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500 animate-pulse"></span>${label}`;
+            } else {
+                badge.classList.add('bg-stone-100', 'text-stone-700', 'border', 'border-stone-350');
+                badge.innerText = label;
+            }
+        }
+
+        function updateRoleBadge() {
+            const badge = document.getElementById('role-badge');
+            if (viewMode === 'host') {
+                badge.innerText = "Instructor Screen";
+                badge.className = "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-stone-900 text-stone-100";
+                document.querySelectorAll('.hidden-player-only').forEach(el => el.classList.remove('hidden-player-only'));
+            } else {
+                badge.innerText = "Student Client";
+                badge.className = "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-stone-100 text-stone-700";
+                document.querySelectorAll('.hidden-player-only').forEach(el => el.classList.add('hidden'));
+            }
+        }
+
+        window.submitRoomCode = function() {
+            playSfx('click');
+            const val = document.getElementById('input-room-code').value.trim().toUpperCase();
+            if (val.length !== 4) {
+                showJoinError("Room code must be exactly 4 digits long.");
+                return;
+            }
+            showJoinError(null);
+            
+            // Update URL cleanly with room code parameter
+            const newUrl = `${window.location.origin}${window.location.pathname}?room=${val}`;
+            window.history.pushState({}, '', newUrl);
+            
+            roomCode = val;
+            
+            // Set Badge
+            document.getElementById('room-badge').classList.remove('hidden');
+            document.getElementById('room-badge-code').innerText = roomCode;
+
+            const isDemoConfig = firebaseConfig.apiKey === "YOUR_API_KEY" || firebaseConfig.apiKey.includes("YOUR_");
+            if (isDemoConfig) {
+                activateDemoMode();
+            } else {
+                connectToRoom(roomCode);
+            }
+        };
+
+        function showJoinError(text) {
+            const el = document.getElementById('join-error-msg');
+            if (text) {
+                el.innerText = text;
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+
+        function renderLobbyQRCode() {
+            // Find base URL without parameter so students arriving enter the room safely
+            const pathUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+            document.getElementById('player-link-text').innerText = pathUrl;
+
+            // Generate clean vector representation of URL
+            const qrBox = document.getElementById('lobby-qrcode');
+            qrBox.innerHTML = '';
+            try {
+                new QRCode(qrBox, {
+                    text: pathUrl,
+                    width: 140,
+                    height: 140,
+                    colorDark: "#1c1917",
+                    colorLight: "#ffffff"
+                });
+            } catch (err) {
+                qrBox.innerHTML = `<span class="text-xs text-rose-500">QR Code Generation Error</span>`;
+            }
+        }
+
+        function syncEngineState(data) {
+            if (!data) return;
+            state.currentScenario = data.currentScenario ?? -1;
+            state.votes = data.votes ?? getEmptyVotes();
+            state.sessionId = data.sessionId ?? 'session-default';
+
+            // Wipe outdated local storage selections on new game session identifier
+            const activeLocalSession = localStorage.getItem('local_voted_session');
+            if (activeLocalSession !== state.sessionId) {
+                for (let i = 0; i < SCENARIOS.length; i++) {
+                    localStorage.removeItem(`scenario_voted_${i}`);
+                }
+                localStorage.setItem('local_voted_session', state.sessionId);
+            }
+
+            renderUI();
+        }
+
+        function renderUI() {
+            // Screen 1: Ensure Room Code Entry page is showed if student arrives without parameter
+            if (!roomCode && viewMode === 'player') {
+                document.getElementById('screen-join').classList.remove('hidden');
+                document.getElementById('screen-lobby').classList.add('hidden');
+                document.getElementById('screen-playing').classList.add('hidden');
+                document.getElementById('screen-summary').classList.add('hidden');
+                return;
+            } else {
+                document.getElementById('screen-join').classList.add('hidden');
+            }
+
+            const current = state.currentScenario;
+
+            if (current === -1) {
+                // Lobby Screen
+                document.getElementById('screen-lobby').classList.remove('hidden');
+                document.getElementById('screen-playing').classList.add('hidden');
+                document.getElementById('screen-summary').classList.add('hidden');
+
+                // Dynamic Code Indicator UI
+                document.getElementById('lobby-code-display').innerText = roomCode || '----';
+
+                if (viewMode === 'host') {
+                    document.getElementById('lobby-qr-container').classList.remove('hidden');
+                    document.getElementById('lobby-host-controls').classList.remove('hidden');
+                    document.getElementById('lobby-player-message').classList.add('hidden');
+                    renderLobbyQRCode();
+                } else {
+                    document.getElementById('lobby-qr-container').classList.add('hidden');
+                    document.getElementById('lobby-host-controls').classList.add('hidden');
+                    document.getElementById('lobby-player-message').classList.remove('hidden');
+                }
+            } else if (current >= 0 && current < SCENARIOS.length) {
+                // Scenario Active
+                document.getElementById('screen-lobby').classList.add('hidden');
+                document.getElementById('screen-playing').classList.remove('hidden');
+                document.getElementById('screen-summary').classList.add('hidden');
+
+                const sc = SCENARIOS[current];
+                document.getElementById('playing-progress-tag').innerText = `Scenario ${current + 1} of ${SCENARIOS.length}`;
+                document.getElementById('playing-scenario-title').innerText = sc.title;
+                document.getElementById('playing-scenario-body').innerText = sc.question;
+
+                if (viewMode === 'host') {
+                    document.getElementById('host-results-panel').classList.remove('hidden');
+                    document.getElementById('player-active-panel').classList.add('hidden');
+                    document.getElementById('player-locked-panel').classList.add('hidden');
+                    renderHostCharts(current, sc);
+                } else {
+                    document.getElementById('host-results-panel').classList.add('hidden');
+                    
+                    const alreadyVoted = localStorage.getItem(`scenario_voted_${current}`) === 'true';
+                    if (alreadyVoted) {
+                        document.getElementById('player-active-panel').classList.add('hidden');
+                        document.getElementById('player-locked-panel').classList.remove('hidden');
+                    } else {
+                        document.getElementById('player-active-panel').classList.remove('hidden');
+                        document.getElementById('player-locked-panel').classList.add('hidden');
+                        renderPlayerChoices(current, sc);
+                    }
+                }
+            } else {
+                // Session End Wrap-Up
+                document.getElementById('screen-lobby').classList.add('hidden');
+                document.getElementById('screen-playing').classList.add('hidden');
+                document.getElementById('screen-summary').classList.remove('hidden');
+
+                if (viewMode === 'host') {
+                    document.getElementById('btn-final-reset').classList.remove('hidden');
+                    document.getElementById('summary-player-msg').classList.add('hidden');
+                } else {
+                    document.getElementById('btn-final-reset').classList.add('hidden');
+                    document.getElementById('summary-player-msg').classList.remove('hidden');
+                }
+                renderFinalSummary();
+            }
+        }
+
+        function renderHostCharts(index, scenario) {
+            const sVotes = state.votes[index] || { A: 0, B: 0, C: 0 };
+            const total = (sVotes.A || 0) + (sVotes.B || 0) + (sVotes.C || 0);
+
+            document.getElementById('total-scen-votes').innerText = `${total} ${total === 1 ? 'submission' : 'submissions'}`;
+
+            const pA = total > 0 ? Math.round((sVotes.A / total) * 100) : 0;
+            const pB = total > 0 ? Math.round((sVotes.B / total) * 100) : 0;
+            const pC = total > 0 ? Math.round((sVotes.C / total) * 100) : 0;
+
+            updateBarElement('bar-votes-a', 'label-votes-a', sVotes.A, pA);
+            updateBarElement('bar-votes-b', 'label-votes-b', sVotes.B, pB);
+            updateBarElement('bar-votes-c', 'label-votes-c', sVotes.C, pC);
+
+            document.getElementById('analysis-text-a').innerHTML = `🔍 <strong>A - Blunt Honesty:</strong> ${scenario.analysis.A}`;
+            document.getElementById('analysis-text-b').innerHTML = `🔍 <strong>B - Comforting Dishonesty:</strong> ${scenario.analysis.B}`;
+            document.getElementById('analysis-text-c').innerHTML = `🔍 <strong>C - Compassionate Honesty:</strong> ${scenario.analysis.C}`;
+
+            const btn = document.getElementById('btn-next-scenario');
+            if (index === SCENARIOS.length - 1) {
+                btn.innerHTML = `<span>View Final Class Profile</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"></path></svg>`;
+            } else {
+                btn.innerHTML = `<span>Advance Scenario</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>`;
+            }
+        }
+
+        function updateBarElement(barId, labelId, count, percent) {
+            const bar = document.getElementById(barId);
+            const label = document.getElementById(labelId);
+
+            bar.style.width = `${percent}%`;
+            label.innerText = `${count} ${count === 1 ? 'vote' : 'votes'} (${percent}%)`;
+            
+            if (percent > 12) {
+                bar.innerHTML = `<span class="text-white font-bold text-xs mr-2">${percent}%</span>`;
+            } else {
+                bar.innerHTML = '';
+            }
+        }
+
+        function renderPlayerChoices(index, scenario) {
+            const grid = document.getElementById('player-options-grid');
+            grid.innerHTML = '';
+
+            ['A', 'B', 'C'].forEach(key => {
+                const optText = scenario.options[key];
+                
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left bg-white border-2 border-stone-200 hover:border-stone-800 p-5 rounded-2xl transition-all duration-150 active:scale-[0.98] shadow-sm flex gap-4 items-start relative group";
+                
+                let badgeStyle = "text-rose-600 bg-rose-50 border-rose-200";
+                if (key === 'B') badgeStyle = "text-sky-600 bg-sky-50 border-sky-200";
+                if (key === 'C') badgeStyle = "text-emerald-600 bg-emerald-50 border-emerald-200";
+
+                btn.innerHTML = `
+                    <span class="w-8 h-8 rounded-xl font-bold flex items-center justify-center border shrink-0 ${badgeStyle}">${key}</span>
+                    <span class="text-stone-800 text-sm sm:text-base font-medium pr-4 mt-1.5">${optText}</span>
+                `;
+
+                btn.onclick = () => {
+                    submitPlayerVote(index, key);
+                };
+
+                grid.appendChild(btn);
+            });
+        }
+
+        function renderFinalSummary() {
+            let totalA = 0;
+            let totalB = 0;
+            let totalC = 0;
+
+            for (let i = 0; i < SCENARIOS.length; i++) {
+                const sVotes = state.votes[i] || { A: 0, B: 0, C: 0 };
+                totalA += sVotes.A || 0;
+                totalB += sVotes.B || 0;
+                totalC += sVotes.C || 0;
+            }
+
+            const grandTotal = totalA + totalB + totalC;
+
+            const pA = grandTotal > 0 ? Math.round((totalA / grandTotal) * 100) : 0;
+            const pB = grandTotal > 0 ? Math.round((totalB / grandTotal) * 100) : 0;
+            const pC = grandTotal > 0 ? Math.round((totalC / grandTotal) * 100) : 0;
+
+            document.getElementById('final-percent-a').innerText = `${pA}%`;
+            document.getElementById('final-percent-b').innerText = `${pB}%`;
+            document.getElementById('final-percent-c').innerText = `${pC}%`;
+
+            document.getElementById('final-raw-a').innerText = `/ ${totalA} ${totalA === 1 ? 'vote' : 'votes'}`;
+            document.getElementById('final-raw-b').innerText = `/ ${totalB} ${totalB === 1 ? 'vote' : 'votes'}`;
+            document.getElementById('final-raw-c').innerText = `/ ${totalC} ${totalC === 1 ? 'vote' : 'votes'}`;
+        }
+
+        async function submitPlayerVote(scenarioIndex, choice) {
+            playSfx('success');
+            
+            localStorage.setItem(`scenario_voted_${scenarioIndex}`, 'true');
+
+            if (isDemoMode) {
+                state.votes[scenarioIndex][choice]++;
+                updateDemoClientsState();
+                renderUI();
+            } else {
+                try {
+                    const fieldPath = `votes.${scenarioIndex}.${choice}`;
+                    await updateDoc(sessionDocRef, {
+                        [fieldPath]: increment(1)
+                    });
+                } catch (err) {
+                    console.error("Firestore write transaction failed. Retrying local cache update.", err);
+                    state.votes[scenarioIndex][choice]++;
+                    updateDemoClientsState();
+                    renderUI();
+                }
+            }
+        }
+
+        // Host Controllers
+        window.advanceScenario = async function() {
+            playSfx('click');
+            const target = state.currentScenario + 1;
+            if (target > SCENARIOS.length) return;
+
+            if (isDemoMode) {
+                state.currentScenario = target;
+                updateDemoClientsState();
+                renderUI();
+            } else {
+                try {
+                    await updateDoc(sessionDocRef, {
+                        currentScenario: target
+                    });
+                } catch (err) {
+                    console.error("Room synchronization state write failed.", err);
+                }
+            }
+        };
+
+        window.retreatScenario = async function() {
+            playSfx('click');
+            const target = state.currentScenario - 1;
+            if (target < -1) return;
+
+            if (isDemoMode) {
+                state.currentScenario = target;
+                updateDemoClientsState();
+                renderUI();
+            } else {
+                try {
+                    await updateDoc(sessionDocRef, {
+                        currentScenario: target
+                    });
+                } catch (err) {
+                    console.error("Room sync state retreat write failed.", err);
+                }
+            }
+        };
+
+        window.resetSession = async function() {
+            playSfx('click');
+            if (isDemoMode) {
+                createFreshLocalSession();
+            } else {
+                await resetSessionOnServer();
+            }
+        };
+
+        async function resetSessionOnServer() {
+            const freshState = {
+                currentScenario: -1,
+                votes: getEmptyVotes(),
+                sessionId: 'session-' + Date.now()
+            };
+            if (db && sessionDocRef) {
+                try {
+                    await setDoc(sessionDocRef, freshState);
+                } catch (err) {
+                    console.error("Unable to reset Firestore session document.", err);
+                }
+            }
+        }
+
+        function updateDemoClientsState() {
+            if (bc) {
+                bc.postMessage({
+                    roomCode: roomCode,
+                    state: state
+                });
+            }
+            localStorage.setItem(`demo_session_state_${roomCode}`, JSON.stringify(state));
+        }
+
+        window.onload = () => {
+            bootSystem();
+        };
+
+    </script>
+</body>
+</html>
