@@ -172,7 +172,7 @@ service cloud.firestore {
                 <div class="flex items-center gap-2">
                     <span id="playing-progress-tag" class="text-xs font-extrabold uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full"></span>
                 </div>
-                <h3 id="playing-scenario-title" class="font-serif text-3xl sm:text-4xl text-stone-900 leading-tight"></h3>
+                <h3 id="playing-scenario-title" class="font-serif text-3xl sm:text-4xl text-stone-900 leading-tight font-bold"></h3>
                 <blockquote id="playing-scenario-body" class="text-stone-700 text-base sm:text-lg leading-relaxed border-l-4 border-stone-300 pl-4 italic py-1"></blockquote>
                 
                 <!-- Player Active Choices: Large buttons -->
@@ -183,12 +183,19 @@ service cloud.firestore {
                     </div>
                 </div>
 
-                <!-- Player Locked State -->
+                <!-- Player Locked State with Consequence Nudge -->
                 <div id="player-locked-panel" class="hidden bg-stone-900 text-stone-100 p-6 rounded-3xl shadow-lg border border-stone-800 flex flex-col items-center text-center gap-3 animate-fade-in">
                     <div class="w-12 h-12 rounded-full bg-stone-800 text-stone-100 flex items-center justify-center text-xl font-bold">✓</div>
                     <div>
                         <h4 class="font-bold text-lg">Your response is locked in!</h4>
-                        <p class="text-xs text-stone-400 mt-1">Look up at the classroom screen to watch the consensus shift in real time.</p>
+                        
+                        <!-- Dynamic quiet consequence reveal -->
+                        <div class="mt-4 p-4 bg-stone-800/40 border border-stone-700/50 rounded-2xl max-w-sm mx-auto">
+                            <span class="text-[10px] text-stone-500 uppercase tracking-widest font-bold block mb-1">Consequence</span>
+                            <p id="player-consequence-text" class="text-xs text-stone-300 italic font-medium leading-relaxed"></p>
+                        </div>
+
+                        <p class="text-[10px] text-stone-400 mt-4">Look up at the classroom screen to watch the consensus shift in real time.</p>
                     </div>
                 </div>
             </div>
@@ -240,6 +247,15 @@ service cloud.firestore {
                         </div>
                         <p id="analysis-text-c" class="text-[11px] text-stone-500 italic bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200/50"></p>
                     </div>
+                </div>
+
+                <!-- Live Discussion Guide / Host Debrief Card -->
+                <div id="host-debrief-box" class="hidden mt-2 p-4 bg-amber-50 border border-amber-200/60 rounded-2xl animate-fade-in shadow-sm">
+                    <div class="flex items-center gap-2 text-amber-800 font-extrabold text-xs uppercase tracking-wider mb-1.5">
+                        <span class="text-base">💬</span>
+                        <span>Instructor Debrief Prompt</span>
+                    </div>
+                    <p id="host-debrief-text" class="text-xs sm:text-sm text-stone-800 font-semibold leading-relaxed"></p>
                 </div>
 
                 <!-- Host Controls Row with Reset and Back Buttons -->
@@ -357,6 +373,7 @@ service cloud.firestore {
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'honesty-compassion-game';
 
+        // Updated content list representing the six customized college debate scenarios
         const SCENARIOS = [
             {
                 title: "The Film",
@@ -370,7 +387,9 @@ service cloud.firestore {
                     A: "Raw, blunt truth-telling.",
                     B: "Immediate harmony preservation.",
                     C: "Cooperative critique with care."
-                }
+                },
+                debrief: "Ask the room: what made this feel low-stakes enough to be honest? What if it were their thesis, not a film?",
+                consequence: "They ask you to be their editor next time."
             },
             {
                 title: "The Waiting Room",
@@ -384,7 +403,25 @@ service cloud.firestore {
                     A: "Dry clinical probabilities.",
                     B: "Compassionate, but unrealistic assurance.",
                     C: "Honest status delivery with supportive actions."
-                }
+                },
+                debrief: "Ask: does 'honest but gentle' actually work in practice here, or does the family just hear what they want to hear?",
+                consequence: "The family remembers exactly what you said, for years."
+            },
+            {
+                title: "The Application",
+                question: "A close friend is applying to join a volunteer ambulance crew and needs to submit proof of a first-responder certification. They never actually finished the course, they attended most of it but missed the final practical exam, and they ask you to help them rehearse answers for an interview where they plan to claim they're certified. \"It's basically the same thing,\" they say. \"I know what to do, I just didn't have time to sit the last test.\" They ask you not to mention this to anyone.",
+                options: {
+                    A: "Tell them directly you won't help, and that they need to withdraw the application or finish the certification first, even if it damages the friendship.",
+                    B: "Help them prepare and say nothing further, it's their decision and their risk to take.",
+                    C: "Tell them you won't help them rehearse, but don't report it or push further, hoping they'll reconsider on their own before the interview."
+                },
+                analysis: {
+                    A: "Direct boundary enforcement prioritizing public safety.",
+                    B: "Prioritizing loyalty and personal boundaries.",
+                    C: "Passive boundary setting, passing final decision onto them."
+                },
+                debrief: "Ask whoever picked A: what would make you change your mind? Ask whoever picked C: what happens if they don't reconsider?",
+                consequence: "The crew responds to a call three weeks later."
             },
             {
                 title: "Before the Interview",
@@ -398,7 +435,9 @@ service cloud.firestore {
                     A: "Unmitigated fashion alert.",
                     B: "Validation prioritizing confidence over risk.",
                     C: "Actionable alert honoring context and timing."
-                }
+                },
+                debrief: "Ask: whose comfort is actually being protected by option B, yours or theirs?",
+                consequence: "They get the callback. Or they don't."
             },
             {
                 title: "The Group Project",
@@ -412,35 +451,25 @@ service cloud.firestore {
                     A: "Strict structural feedback with non-confrontation.",
                     B: "Compromised metrics to protect feelings.",
                     C: "Consistent systemic feedback paired with safe disclosure."
-                }
+                },
+                debrief: "Ask: does telling them privately actually change anything, or does it just make you feel better about the evaluation?",
+                consequence: "The evaluation is submitted. So is your conversation with them, or its absence."
             },
             {
-                title: "The Car Keys",
-                question: "Your grandparent has been getting more forgetful lately and asks you, \"Do you think I should still be driving?\"",
+                title: "The Last Good Week",
+                question: "Your grandparent is in their final days, no more treatment decisions left to make, nothing to be gained or changed by anything you say now. They ask, smiling, \"It was a good life, wasn't it? I did right by you all?\" In truth, there were real regrets: years they weren't around, a falling out with your uncle that never healed. None of it can be fixed now.",
                 options: {
-                    A: "No, honestly, I don't think you should be driving anymore.",
-                    B: "Of course, you're fine, don't worry about it.",
-                    C: "I've noticed a few things that worry me. Would you be open to getting a driving assessment done, just so we both know for sure?"
+                    A: "Give them the full, honest accounting, regrets included, because they asked and deserve the truth.",
+                    B: "Tell them simply yes, it was a good life, and they did right by everyone.",
+                    C: "Acknowledge one real imperfection gently while affirming the whole, \"There were hard years, but yes, you did right by us.\""
                 },
                 analysis: {
-                    A: "Abrupt reality orientation.",
-                    B: "Dangerous verification to preserve status.",
-                    C: "Safe assessment framing for shared understanding."
-                }
-            },
-            {
-                title: "The Feedback",
-                question: "Your manager, who you respect and who has been a genuine mentor to you, asks for your honest feedback on how they've been leading the team lately. Their meetings have been running long and unfocused, and a few people on the team have quietly started dreading them.",
-                options: {
-                    A: "Honestly, the meetings have been running long and losing focus.",
-                    B: "I think you're doing a great job, no complaints.",
-                    C: "I think the team really values your openness in meetings. I have noticed they've been running long lately though, and a couple of people have mentioned it. Might be worth a tighter agenda?"
+                    A: "Absolute diagnostic transparency.",
+                    B: "Protective consolidation of emotional peace.",
+                    C: "Tempered validation honoring complex histories."
                 },
-                analysis: {
-                    A: "Zero-padding downward feedback.",
-                    B: "Polite deferral preventing improvements.",
-                    C: "Constructive diagnostic with constructive framework."
-                }
+                debrief: "Ask the room directly: does honesty still matter once there's nothing left to decide? Let them disagree.",
+                consequence: "This is the last conversation you have with them."
             }
         ];
 
@@ -837,6 +866,14 @@ service cloud.firestore {
                     if (alreadyVoted) {
                         document.getElementById('player-active-panel').classList.add('hidden');
                         document.getElementById('player-locked-panel').classList.remove('hidden');
+                        
+                        // Update the consequence block with appropriate nuance
+                        const consequenceText = document.getElementById('player-consequence-text');
+                        if (sc.consequence) {
+                            consequenceText.innerText = sc.consequence;
+                        } else {
+                            consequenceText.innerText = "Response submitted.";
+                        }
                     } else {
                         document.getElementById('player-active-panel').classList.remove('hidden');
                         document.getElementById('player-locked-panel').classList.add('hidden');
@@ -873,9 +910,19 @@ service cloud.firestore {
             updateBarElement('bar-votes-b', 'label-votes-b', sVotes.B, pB);
             updateBarElement('bar-votes-c', 'label-votes-c', sVotes.C, pC);
 
-            document.getElementById('analysis-text-a').innerHTML = `🔍 <strong>A - Blunt Honesty:</strong> ${scenario.analysis.A}`;
-            document.getElementById('analysis-text-b').innerHTML = `🔍 <strong>B - Comforting Dishonesty:</strong> ${scenario.analysis.B}`;
-            document.getElementById('analysis-text-c').innerHTML = `🔍 <strong>C - Compassionate Honesty:</strong> ${scenario.analysis.C}`;
+            document.getElementById('analysis-text-a').innerHTML = `🔍 <strong>A:</strong> ${scenario.analysis.A}`;
+            document.getElementById('analysis-text-b').innerHTML = `🔍 <strong>B:</strong> ${scenario.analysis.B}`;
+            document.getElementById('analysis-text-c').innerHTML = `🔍 <strong>C:</strong> ${scenario.analysis.C}`;
+
+            // Add host debrief prompt panel logic (visible only on view=host, once votes start coming in)
+            const debriefBox = document.getElementById('host-debrief-box');
+            const debriefText = document.getElementById('host-debrief-text');
+            if (total > 0 && scenario.debrief) {
+                debriefText.innerText = scenario.debrief;
+                debriefBox.classList.remove('hidden');
+            } else {
+                debriefBox.classList.add('hidden');
+            }
 
             const btn = document.getElementById('btn-next-scenario');
             if (index === SCENARIOS.length - 1) {
