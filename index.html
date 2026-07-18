@@ -31,6 +31,42 @@
 </head>
 <body class="font-sans text-stone-800 antialiased h-full flex flex-col justify-between">
 
+    <!-- Live Connection Diagnostics Banner -->
+    <div id="diagnostic-banner" class="hidden bg-red-600 text-white px-4 py-3 text-xs sm:text-sm shadow-md transition-all z-50">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div class="flex items-start gap-3">
+                <span class="text-xl">⚠️</span>
+                <div>
+                    <h4 class="font-bold text-sm">Firebase Connection Blocked</h4>
+                    <p id="diagnostic-msg" class="text-red-100 mt-0.5">Initializing diagnostics...</p>
+                </div>
+            </div>
+            <div id="diagnostic-fix-btn-container" class="flex gap-2">
+                <button onclick="showDiagnosticDetails()" class="bg-red-700 hover:bg-red-800 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors text-xs">How to Fix</button>
+                <button onclick="document.getElementById('diagnostic-banner').classList.add('hidden')" class="bg-red-900/50 hover:bg-red-900 text-red-200 px-2.5 py-1.5 rounded-lg transition-colors text-xs">Dismiss</button>
+            </div>
+        </div>
+        <!-- Collapsible detailed instructions panel -->
+        <div id="diagnostic-details-panel" class="hidden max-w-4xl mx-auto mt-3 p-4 bg-red-950/70 rounded-xl text-red-100 border border-red-800/50 text-xs sm:text-sm flex flex-col gap-3">
+            <p class="font-semibold">Your device is attempting to talk to the database but was blocked. Follow these steps to resolve this right now:</p>
+            <ol class="list-decimal pl-5 space-y-1.5 font-medium">
+                <li>Go to your <a href="https://console.firebase.google.com/" target="_blank" class="underline font-bold text-white hover:text-red-200">Firebase Console</a>.</li>
+                <li>In the left sidebar, click <strong>Authentication</strong>. If it's not set up, click Get Started, go to the <strong>Sign-in method</strong> tab, find <strong>Anonymous</strong>, click enable, and save.</li>
+                <li>In the left sidebar, click <strong>Firestore Database</strong>. Go to the <strong>Rules</strong> tab at the top.</li>
+                <li>Replace your security rules with the permissive open settings below, then click <strong>Publish</strong>:</li>
+            </ol>
+            <pre class="bg-red-900/40 p-3 rounded-lg font-mono text-[11px] overflow-x-auto text-white border border-red-800">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</pre>
+            <p class="text-[11px] text-red-300">Note: After making changes in your console, reload this browser tab to verify the connection turns green!</p>
+        </div>
+    </div>
+
     <header class="bg-white border-b border-stone-100 py-3 px-4 sm:px-6 shadow-sm z-10">
         <div class="max-w-6xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -41,8 +77,8 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <span id="room-badge" class="hidden inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-500 text-white">
-                    Room: <span id="room-badge-code" class="ml-1 select-all">----</span>
+                <span id="room-badge" class="hidden inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-stone-900 text-amber-400 border border-stone-800">
+                    Room: <span id="room-badge-code" class="ml-1 select-all font-mono tracking-wider">----</span>
                 </span>
                 <span id="conn-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                     <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -56,13 +92,13 @@
     </header>
 
     <div id="firebase-warning" class="hidden bg-stone-900 text-stone-100 px-4 py-3 text-xs sm:text-sm text-center flex items-center justify-center gap-3 transition-all">
-        <span>✨ <strong>Local Test Sync Mode:</strong> Open another tab to test synchronization instantly without setting up databases!</span>
+        <span>✨ <strong>Local Sync Mode Active:</strong> Open another browser tab on this computer to test communication offline!</span>
         <button onclick="document.getElementById('firebase-warning').remove()" class="bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white px-2 py-1 rounded transition-colors text-xs">Dismiss</button>
     </div>
 
     <main class="flex-grow flex flex-col items-center justify-start py-6 px-4 max-w-6xl w-full mx-auto relative overflow-y-auto">
         
-        <!-- ==================== ROOM ENTRY SCREEN (FOR STUDENTS ARRIVING RAW) ==================== -->
+        <!-- ==================== ROOM ENTRY SCREEN ==================== -->
         <div id="screen-join" class="hidden w-full max-w-md bg-white p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col gap-6 my-auto text-center animate-fade-in">
             <span class="text-3xl">🎓</span>
             <div>
@@ -78,9 +114,8 @@
             <p id="join-error-msg" class="text-xs text-rose-500 font-semibold hidden"></p>
         </div>
 
-        <!-- ==================== LOBBY / WAITING SCREEN (HOST & PLAYER) ==================== -->
+        <!-- ==================== LOBBY / WAITING SCREEN ==================== -->
         <div id="screen-lobby" class="hidden w-full max-w-4xl flex flex-col md:flex-row gap-8 items-center justify-center my-auto">
-            <!-- Left Lobby: Information and Joining Details -->
             <div class="w-full md:w-1/2 flex flex-col gap-5 text-center md:text-left">
                 <span class="text-xs uppercase font-bold tracking-widest text-stone-500 bg-stone-100 px-3 py-1 rounded-full self-center md:self-start">College Interactive Case Study</span>
                 <h2 class="font-serif text-4xl sm:text-5xl text-stone-900 leading-tight">Honesty vs. Compassion</h2>
@@ -95,7 +130,6 @@
 
             <!-- Right Lobby: Control Board / QR Code box -->
             <div class="w-full md:w-1/2 max-w-md bg-white p-6 sm:p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col items-center justify-center text-center gap-6">
-                <!-- Large Room Code Display for Front of Lecture Room -->
                 <div class="w-full bg-stone-900 text-stone-100 p-6 rounded-2xl shadow-md flex flex-col items-center justify-center">
                     <span class="text-[10px] uppercase font-bold tracking-widest text-stone-400">Classroom Room Code</span>
                     <span id="lobby-code-display" class="text-5xl sm:text-6xl font-mono font-bold text-amber-400 tracking-wider my-2">----</span>
@@ -105,7 +139,7 @@
                 <!-- QR Destination -->
                 <div id="lobby-qr-container" class="flex flex-col items-center gap-4 w-full">
                     <div id="lobby-qrcode" class="p-4 bg-white border border-stone-200 rounded-2xl shadow-sm transition-transform hover:scale-105"></div>
-                    <div class="w-full">
+                    <div class="w-full text-center">
                         <p class="text-xs text-stone-400">Scan code to register device</p>
                         <span id="player-link-text" class="text-[10px] font-semibold text-stone-600 underline select-all break-all block mt-1"></span>
                     </div>
@@ -149,7 +183,7 @@
                     </div>
                 </div>
 
-                <!-- Player Locked State: Already Voted Confirmation -->
+                <!-- Player Locked State -->
                 <div id="player-locked-panel" class="hidden bg-stone-900 text-stone-100 p-6 rounded-3xl shadow-lg border border-stone-800 flex flex-col items-center text-center gap-3 animate-fade-in">
                     <div class="w-12 h-12 rounded-full bg-stone-800 text-stone-100 flex items-center justify-center text-xl font-bold">✓</div>
                     <div>
@@ -169,7 +203,7 @@
                     <span id="total-scen-votes" class="bg-stone-100 text-stone-700 px-3 py-1 rounded-full text-xs font-bold">0 submissions</span>
                 </div>
 
-                <!-- CSS Horizontal Live Chart -->
+                <!-- Live Chart Bars -->
                 <div class="flex flex-col gap-6">
                     <!-- Option A Bar -->
                     <div class="flex flex-col gap-2">
@@ -208,7 +242,7 @@
                     </div>
                 </div>
 
-                <!-- Host Control Box -->
+                <!-- Host Controls Row with Reset and Back Buttons -->
                 <div class="border-t border-stone-100 pt-6 flex flex-col sm:flex-row gap-3">
                     <button onclick="resetSession()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 py-3 px-4 rounded-xl font-medium text-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 border border-rose-200" title="Reset all votes and return to lobby">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"></path></svg>
@@ -227,7 +261,7 @@
         </div>
 
         <!-- ==================== CUMULATIVE STUDY / WRAP-UP SCREEN ==================== -->
-        <div id="screen-summary" class="hidden w-full max-w-4xl flex flex-col gap-8 my-auto py-4">
+        <div id="screen-summary" class="hidden w-full max-w-4xl flex flex-col gap-8 my-auto py-4 animate-fade-in">
             <div class="text-center max-w-2xl mx-auto flex flex-col gap-3">
                 <span class="text-xs uppercase font-extrabold tracking-widest text-amber-800 bg-amber-50 border border-amber-200 px-3.5 py-1 rounded-full self-center">Interactive Session Concluded</span>
                 <h2 class="font-serif text-3xl sm:text-4xl text-stone-900 leading-tight">Classroom Philosophy Map</h2>
@@ -294,10 +328,10 @@
 
     </main>
 
-    <footer class="bg-white border-t border-stone-100 py-4 px-6 text-center text-[10px] sm:text-xs text-stone-400 flex flex-col sm:flex-row justify-between items-center gap-2 z-10 shadow-sm">
+    <footer class="bg-white border-t border-stone-100 py-4 px-6 text-center text-[10px] sm:text-xs text-stone-400 flex flex-col sm:flex-row justify-between items-center gap-2 z-10 shadow-sm font-sans">
         <p>Built for Classroom Ethics Experiments &bull; ⚖️ Truth vs Tact Framework</p>
         <button id="btn-footer-reset" onclick="resetSession()" class="hidden-player-only text-rose-500 hover:text-rose-700 hover:underline uppercase tracking-wider font-extrabold text-[9px] sm:text-[10px]">
-            ⚠️ Danger Zone: Wipe Server State
+            ⚠️ Danger Zone: Reset Game Data
         </button>
     </footer>
 
@@ -305,10 +339,10 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, updateDoc, onSnapshot, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =====================================================================
-        // 🔥 INJECTED FROM YOUR TRUE CONFIGURATION
+        // 🔥 PRODUCTION CREDENTIALS MATCHING YOUR PROJECT
         // =====================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBWA3hxLNgzkAL43NZ_HvsAMQZ9Ve8giwg",
@@ -412,8 +446,6 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         const viewMode = urlParams.get('view') === 'host' ? 'host' : 'player';
-        
-        // Setup initial room code tracking
         let roomCode = urlParams.get('room') ? urlParams.get('room').trim().toUpperCase() : '';
 
         let db = null;
@@ -443,6 +475,7 @@
             return Math.floor(1000 + Math.random() * 9000).toString();
         }
 
+        // Tactile sound synth
         function playSfx(type) {
             try {
                 if (!audioCtx) {
@@ -505,11 +538,25 @@
                     const auth = getAuth(app);
                     db = getFirestore(app);
 
-                    // Authenticate anonymously before accessing database
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
+                    // RULE 3 - Authenticate strictly before calling query tasks
+                    let userCredential = null;
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            userCredential = await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            userCredential = await signInAnonymously(auth);
+                        }
+                    } catch (authError) {
+                        console.warn("Firebase authentication blocked:", authError.code || authError);
+                        showSystemDiagnostic("Authentication failed: " + (authError.message || authError) + ". Ensure 'Anonymous' login is enabled in your Firebase Auth dashboard.");
+                        activateDemoMode();
+                        return;
+                    }
+
+                    const user = userCredential?.user;
+                    if (!user) {
+                        activateDemoMode();
+                        return;
                     }
 
                     if (roomCode) {
@@ -522,28 +569,48 @@
 
                 } catch (err) {
                     console.error("Firebase startup check failed. Engaging local fallback mode.", err);
+                    showSystemDiagnostic(err.message || err);
                     activateDemoMode();
                 }
             }
         }
 
-        function connectToRoom(code) {
+        async function connectToRoom(code) {
             setConnectionStatus('live', 'Connecting Live...');
             
-            // Secure nested database reference pointing to the unique room
+            // RULE 1: Standard structured path mapping
             sessionDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', code);
 
             if (unsubscribeSnapshot) unsubscribeSnapshot();
 
+            // If the host starts a room, create the initial document instantly on the cloud
+            if (viewMode === 'host') {
+                try {
+                    const snap = await getDoc(sessionDocRef);
+                    if (!snap.exists()) {
+                        await setDoc(sessionDocRef, {
+                            currentScenario: -1,
+                            votes: getEmptyVotes(),
+                            sessionId: 'session-' + Date.now()
+                        });
+                    }
+                } catch (err) {
+                    console.error("Initial doc write blocked. Firestore Rules blocking write operations.", err);
+                    showSystemDiagnostic(err);
+                    return;
+                }
+            }
+
+            // Bind reactive real-time database listener
             unsubscribeSnapshot = onSnapshot(sessionDocRef, (snap) => {
                 if (snap.exists()) {
                     syncEngineState(snap.data());
+                    hideSystemDiagnostic(); // Reset error display once working
                 } else {
                     if (viewMode === 'host') {
-                        // Initialize a clean session for the instructor immediately
                         resetSessionOnServer();
                     } else {
-                        // Student entered an invalid/non-existent code
+                        // Student entered a non-existent code
                         setConnectionStatus('ready', 'Room Empty');
                         showJoinError("This room code has not been started by any instructor yet.");
                         document.getElementById('screen-join').classList.remove('hidden');
@@ -551,8 +618,32 @@
                 }
             }, (err) => {
                 console.error("Firestore database permission issue. Sliding back to local mock sync.", err);
+                showSystemDiagnostic(err);
                 activateDemoMode();
             });
+        }
+
+        function showSystemDiagnostic(error) {
+            const banner = document.getElementById('diagnostic-banner');
+            const msg = document.getElementById('diagnostic-msg');
+            banner.classList.remove('hidden');
+            
+            let messageStr = error?.message || String(error);
+            if (error?.code === 'permission-denied') {
+                messageStr = "Permission denied. Please update your Firestore Security Rules to allow public access.";
+            } else if (error?.code === 'auth/operation-not-allowed') {
+                messageStr = "Anonymous authentication is currently disabled in your Firebase console settings.";
+            }
+            msg.innerText = messageStr;
+        }
+
+        window.showDiagnosticDetails = function() {
+            const panel = document.getElementById('diagnostic-details-panel');
+            panel.classList.toggle('hidden');
+        };
+
+        function hideSystemDiagnostic() {
+            document.getElementById('diagnostic-banner').classList.add('hidden');
         }
 
         function activateDemoMode() {
@@ -561,12 +652,10 @@
             setConnectionStatus('demo', 'Local Sync Active');
 
             if (!roomCode) {
-                // If student doesn't have a room code parameter in URL, require one
                 renderUI();
                 return;
             }
 
-            // Sync with local memory
             const storageKey = `demo_session_state_${roomCode}`;
             const stored = localStorage.getItem(storageKey);
             if (stored) {
@@ -579,7 +668,6 @@
                 createFreshLocalSession();
             }
 
-            // Connect Broadcast Channel syncing across tabs
             if (bc) {
                 bc.onmessage = (event) => {
                     if (isDemoMode && event.data && event.data.roomCode === roomCode) {
@@ -610,7 +698,7 @@
                 badge.classList.add('bg-amber-50', 'text-amber-800', 'border', 'border-amber-200');
                 badge.innerHTML = `<span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500 animate-pulse"></span>${label}`;
             } else {
-                badge.classList.add('bg-stone-100', 'text-stone-700', 'border', 'border-stone-350');
+                badge.classList.add('bg-stone-100', 'text-stone-700', 'border', 'border-stone-300');
                 badge.innerText = label;
             }
         }
@@ -637,13 +725,10 @@
             }
             showJoinError(null);
             
-            // Update URL cleanly with room code parameter
             const newUrl = `${window.location.origin}${window.location.pathname}?room=${val}`;
             window.history.pushState({}, '', newUrl);
-            
             roomCode = val;
             
-            // Set Badge
             document.getElementById('room-badge').classList.remove('hidden');
             document.getElementById('room-badge-code').innerText = roomCode;
 
@@ -666,11 +751,9 @@
         }
 
         function renderLobbyQRCode() {
-            // Find base URL without parameter so students arriving enter the room safely
             const pathUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
             document.getElementById('player-link-text').innerText = pathUrl;
 
-            // Generate clean vector representation of URL
             const qrBox = document.getElementById('lobby-qrcode');
             qrBox.innerHTML = '';
             try {
@@ -682,7 +765,7 @@
                     colorLight: "#ffffff"
                 });
             } catch (err) {
-                qrBox.innerHTML = `<span class="text-xs text-rose-500">QR Code Generation Error</span>`;
+                qrBox.innerHTML = `<span class="text-xs text-rose-500">QR Code Error</span>`;
             }
         }
 
@@ -692,7 +775,6 @@
             state.votes = data.votes ?? getEmptyVotes();
             state.sessionId = data.sessionId ?? 'session-default';
 
-            // Wipe outdated local storage selections on new game session identifier
             const activeLocalSession = localStorage.getItem('local_voted_session');
             if (activeLocalSession !== state.sessionId) {
                 for (let i = 0; i < SCENARIOS.length; i++) {
@@ -705,7 +787,6 @@
         }
 
         function renderUI() {
-            // Screen 1: Ensure Room Code Entry page is showed if student arrives without parameter
             if (!roomCode && viewMode === 'player') {
                 document.getElementById('screen-join').classList.remove('hidden');
                 document.getElementById('screen-lobby').classList.add('hidden');
@@ -719,12 +800,9 @@
             const current = state.currentScenario;
 
             if (current === -1) {
-                // Lobby Screen
                 document.getElementById('screen-lobby').classList.remove('hidden');
                 document.getElementById('screen-playing').classList.add('hidden');
                 document.getElementById('screen-summary').classList.add('hidden');
-
-                // Dynamic Code Indicator UI
                 document.getElementById('lobby-code-display').innerText = roomCode || '----';
 
                 if (viewMode === 'host') {
@@ -738,7 +816,6 @@
                     document.getElementById('lobby-player-message').classList.remove('hidden');
                 }
             } else if (current >= 0 && current < SCENARIOS.length) {
-                // Scenario Active
                 document.getElementById('screen-lobby').classList.add('hidden');
                 document.getElementById('screen-playing').classList.remove('hidden');
                 document.getElementById('screen-summary').classList.add('hidden');
@@ -767,7 +844,6 @@
                     }
                 }
             } else {
-                // Session End Wrap-Up
                 document.getElementById('screen-lobby').classList.add('hidden');
                 document.getElementById('screen-playing').classList.add('hidden');
                 document.getElementById('screen-summary').classList.remove('hidden');
@@ -879,7 +955,6 @@
 
         async function submitPlayerVote(scenarioIndex, choice) {
             playSfx('success');
-            
             localStorage.setItem(`scenario_voted_${scenarioIndex}`, 'true');
 
             if (isDemoMode) {
@@ -894,9 +969,7 @@
                     });
                 } catch (err) {
                     console.error("Firestore write transaction failed. Retrying local cache update.", err);
-                    state.votes[scenarioIndex][choice]++;
-                    updateDemoClientsState();
-                    renderUI();
+                    showSystemDiagnostic(err);
                 }
             }
         }
@@ -918,6 +991,7 @@
                     });
                 } catch (err) {
                     console.error("Room synchronization state write failed.", err);
+                    showSystemDiagnostic(err);
                 }
             }
         };
@@ -938,6 +1012,7 @@
                     });
                 } catch (err) {
                     console.error("Room sync state retreat write failed.", err);
+                    showSystemDiagnostic(err);
                 }
             }
         };
@@ -962,6 +1037,7 @@
                     await setDoc(sessionDocRef, freshState);
                 } catch (err) {
                     console.error("Unable to reset Firestore session document.", err);
+                    showSystemDiagnostic(err);
                 }
             }
         }
